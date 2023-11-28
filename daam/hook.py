@@ -14,6 +14,7 @@ class ObjectHooker:
     def __enter__(self):
         # When this class called at 'with', this function called.
         self.hook()
+        return self
     
     def __exit__(self):
         # When this class is closed at 'with', this function called.
@@ -92,7 +93,7 @@ class UNetCrossAttentionLocator(ModuleLocator):
         """
         self.layer_names.clear()
         blocks_list = list()
-        up_names = ['up' * len(model.up_blocks)]
+        up_names = ['up'] * len(model.up_blocks)
         down_names = ['down'] * len(model.down_blocks)
         
         for block, name in itertools.chain(
