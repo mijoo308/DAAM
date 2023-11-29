@@ -16,8 +16,9 @@ class ObjectHooker:
         self.hook()
         return self
     
-    def __exit__(self):
+    def __exit__(self, type, value, trackback):
         # When this class is closed at 'with', this function called.
+        # [mj] argument should exist even if not used explicitly.
         self.unhook()
     
     def hook(self):
@@ -41,10 +42,10 @@ class ObjectHooker:
         return self
     
     def _hook_impl(self):
-        raise NotImplementedError
+        pass
     
     def _unhook_impl(self):
-        raise NotImplementedError
+        pass
 
     def monkey_patch(self, fn_name, fn):
         self.old_state[f'old_fn_{fn_name}'] = getattr(self.module, fn_name)
@@ -114,4 +115,3 @@ class UNetCrossAttentionLocator(ModuleLocator):
                 self.layer_names.extend(names)
 
         return blocks_list
-
