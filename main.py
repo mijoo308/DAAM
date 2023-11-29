@@ -13,6 +13,7 @@ if __name__ == "__main__":
     parser.add_argument('--model_id', type=str, default='stabilityai/stable-diffusion-2-base', help='model id')
     parser.add_argument('--prompt', '-p', type=str, default='Two dogs run across the field', help='prompt (sentence)')
     parser.add_argument('--word', '-w', type=str, default='Two', help='word to be attentioned')
+    parser.add_argument('--num_inference', '-it', type=int, default=30, help='set the number for inference step')
     parser.add_argument('--save', '-s', type=str, default='./result', help='save path')
 
     args = parser.parse_args()
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     seed = set_seed(0)
     with torch.no_grad():
         with trace.DiffusionHeatMapHooker(pipe) as HOOKER:
-            out = pipe(args.prompt, num_inference_steps=30, generator=seed) # out.images[0].shape : 64x64
+            out = pipe(args.prompt, num_inference_steps=args.num_inference, generator=seed) # out.images[0].shape : 64x64
 
             # core 
             heat_map = HOOKER.compute_global_heat_map()
