@@ -42,5 +42,5 @@ if __name__ == "__main__":
 
             # visualization
             heat_map.plot_overlay(out.images[0])
-            plt.show()
             plt.savefig(save_path)
+            plt.show()
