@@ -8,39 +8,27 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from matplotlib import pyplot as plt
-from typing import List, Any, Dict, Tuple, Set, Iterable, Union, Optional
 import spacy.tokens
 from spacy.tokens import Token
 
 from .evaluate import compute_ioa
 from .utils import compute_token_merge_indices, cached_nlp, auto_autocast
 
-__all__ = ['GlobalHeatMap', 'RawHeatMapCollection', 'WordHeatMap', 'ParsedHeatMap', 'SyntacticHeatMapPair']
 
-
-def plot_overlay_heat_map(image: Union[PIL.Image.Image, np.ndarray], 
-                          heat_map: torch.Tensor, 
-                          word: Optional[str] = None, 
-                          out_file: Optional[Union[str, Path]] = None, 
-                          crop: Optional[int] = None, 
-                          color_normalize: bool = True, 
-                          ax: Optional[plt.Axes] = None):
+def plot_overlay_heat_map(image, heat_map, word=None, out_file=None, crop=None, color_normalize=True, ax=None):
     plt_ = setup_plot(ax)
     image_processed, heat_map_processed = process_image_heatmap(image, heat_map, crop, color_normalize)
     plot_heatmap_image_overlay(image_processed, heat_map_processed, plt_)
     set_title_and_save_plot(word, out_file, plt_, ax)
 
-def setup_plot(ax: Optional[plt.Axes]) -> plt.Axes:
+def setup_plot(ax):
     if ax is None:
         plt.clf()
         plt.rcParams.update({'font.size': 24})
         return plt
     return ax
 
-def process_image_heatmap(image: Union[PIL.Image.Image, np.ndarray], 
-                          heat_map: torch.Tensor, 
-                          crop: Optional[int], 
-                          color_normalize: bool) -> (np.ndarray, torch.Tensor):
+def process_image_heatmap(image, heat_map, crop, color_normalize):
     image_np = np.array(image)
     heat_map_np = heat_map.cpu().numpy() if color_normalize else heat_map.clamp_(min=0, max=1).cpu().numpy()
     if crop is not None:
@@ -48,16 +36,16 @@ def process_image_heatmap(image: Union[PIL.Image.Image, np.ndarray],
         heat_map_np = heat_map_np[crop:-crop, crop:-crop]
     return image_np, torch.tensor(heat_map_np)
 
-def plot_heatmap_image_overlay(image_np: np.ndarray, heat_map_tensor: torch.Tensor, plt_: plt.Axes):
+def plot_heatmap_image_overlay(image_np, heat_map_tensor, plt_):
     plt_.imshow(heat_map_tensor, cmap='jet')
     overlay = create_overlay(image_np, heat_map_tensor)
     plt_.imshow(overlay)
 
-def create_overlay(image_np: np.ndarray, heat_map_tensor: torch.Tensor) -> np.ndarray:
+def create_overlay(image_np, heat_map_tensor):
     image_tensor = torch.from_numpy(image_np).float() / 255
     return torch.cat((image_tensor, (1 - heat_map_tensor.unsqueeze(-1))), dim=-1).numpy()
 
-def set_title_and_save_plot(word: Optional[str], out_file: Optional[Union[str, Path]], plt_: plt.Axes, ax: Optional[plt.Axes]):
+def set_title_and_save_plot(word, out_file, plt_, ax):
     if word:
         title_function = plt_.title if ax is None else ax.set_title
         title_function(word)
@@ -65,31 +53,23 @@ def set_title_and_save_plot(word: Optional[str], out_file: Optional[Union[str, P
         plt_.savefig(out_file)
 
 
-
-
 class WordHeatMap:
-    def __init__(self, heatmap: torch.Tensor, word: Optional[str] = None, word_idx: Optional[int] = None):
+    def __init__(self, heatmap, word=None, word_idx=None):
         self.word = word
         self.word_idx = word_idx
         self.heatmap = heatmap
 
-    @property
-    def value(self) -> torch.Tensor:
-        return self.heatmap
-
-    def plot_overlay(self, image: Union[PIL.Image.Image, Any], out_file: Optional[str] = None,
-                     color_normalize: bool = True, ax: Optional[Any] = None, **expand_kwargs):
+    def plot_overlay(self, image, out_file=None, color_normalize=True, ax=None, **expand_kwargs):
         expanded_heatmap = self.expand_as(image, **expand_kwargs)
         plot_overlay_heat_map(image, expanded_heatmap, word=self.word, out_file=out_file,
                               color_normalize=color_normalize, ax=ax)
 
-    def expand_as(self, image: Union[PIL.Image.Image, Any], absolute: bool = False,
-                  threshold: Optional[float] = None) -> torch.Tensor:
+    def expand_as(self, image, absolute=False, threshold=None):
         interpolated_heatmap = self.interpolate_heatmap(image)
         normalized_heatmap = self.normalize_heatmap(interpolated_heatmap, absolute)
         return self.apply_threshold(normalized_heatmap, threshold) if threshold is not None else normalized_heatmap
 
-    def interpolate_heatmap(self, image: Union[PIL.Image.Image, Any]) -> torch.Tensor:
+    def interpolate_heatmap(self, image):
         image_size = self.get_image_size(image)
 
         # Check if the heatmap is 1D or 2D and reshape it accordingly
@@ -107,18 +87,17 @@ class WordHeatMap:
 
         return F.interpolate(heatmap_reshaped, size=image_size, mode='bicubic').cpu().squeeze()
 
-    def normalize_heatmap(self, heatmap: torch.Tensor, absolute: bool) -> torch.Tensor:
+    def normalize_heatmap(self, heatmap, absolute):
         return (heatmap - heatmap.min()) / (heatmap.max() - heatmap.min() + 1e-8) if not absolute else heatmap
 
-    def apply_threshold(self, heatmap: torch.Tensor, threshold: float) -> torch.Tensor:
+    def apply_threshold(self, heatmap, threshold):
         return (heatmap > threshold).float()
 
-    def get_image_size(self, image: Union[PIL.Image.Image, Any]) -> tuple:
+    def get_image_size(self, image):
         return (image.size[0], image.size[1]) if isinstance(image, PIL.Image.Image) else image.shape[:2]
 
-    def compute_ioa(self, other: 'WordHeatMap') -> float:
+    def compute_ioa(self, other):
         return compute_ioa(self.heatmap, other.heatmap)
-
 
 
 @dataclass
@@ -137,27 +116,27 @@ class ParsedHeatMap:
 
 
 class GlobalHeatMap:
-    def __init__(self, tokenizer: Any, prompt: str, heat_maps: torch.Tensor):
+    def __init__(self, tokenizer, prompt, heat_maps):
         self.tokenizer = tokenizer
         self.prompt = prompt
         self.heat_maps = heat_maps
         self._compute_word_heat_map = lru_cache(maxsize=50)(self._compute_word_heat_map_internal)
 
-    def compute_word_heat_map(self, word: str, word_idx: int = None) -> WordHeatMap:
+    def compute_word_heat_map(self, word, word_idx=None):
         return self._compute_word_heat_map(word, word_idx)
 
-    def _compute_word_heat_map_internal(self, word: str, word_idx: int = None) -> WordHeatMap:
+    def _compute_word_heat_map_internal(self, word, word_idx=None):
         merge_idxs = compute_token_merge_indices(self.tokenizer, self.prompt, word, word_idx)
         averaged_heatmap = self.heat_maps[merge_idxs].mean(0)
         return WordHeatMap(averaged_heatmap, word, word_idx)
 
-    def generate_parsed_heat_maps(self) -> Iterable[ParsedHeatMap]:
+    def generate_parsed_heat_maps(self):
         for token in cached_nlp(self.prompt):
             heat_map = self.compute_word_heat_map(token.text)
             if heat_map:
                 yield ParsedHeatMap(heat_map, token)
 
-    def generate_syntactic_relations(self) -> Iterable[SyntacticHeatMapPair]:
+    def generate_syntactic_relations(self):
         for token in cached_nlp(self.prompt):
             if token.dep_ != 'ROOT':
                 dep_heat_map = self.compute_word_heat_map(token.text)
@@ -166,26 +145,23 @@ class GlobalHeatMap:
                     yield SyntacticHeatMapPair(head_heat_map, dep_heat_map, token.head.text, token.text, token.dep_)
 
 
-RawHeatMapKey = Tuple[int, int, int]  # factor, layer, head
-
-
 class RawHeatMapCollection:
     def __init__(self):
-        self.ids_to_heatmaps: Dict[RawHeatMapKey, torch.Tensor] = defaultdict(lambda: 0.0)
-        self.ids_to_num_maps: Dict[RawHeatMapKey, int] = defaultdict(lambda: 0)
+        self.ids_to_heatmaps = defaultdict(lambda: 0.0)
+        self.ids_to_num_maps = defaultdict(lambda: 0)
 
-    def update(self, factor: int, layer_idx: int, head_idx: int, heatmap: torch.Tensor):
+    def update(self, factor, layer_idx, head_idx, heatmap):
         with auto_autocast(dtype=torch.float32):
             key = (factor, layer_idx, head_idx)
             self.ids_to_heatmaps[key] = self.ids_to_heatmaps[key] + heatmap
 
-    def factors(self) -> Set[int]:
+    def factors(self):
         return set(key[0] for key in self.ids_to_heatmaps.keys())
 
-    def layers(self) -> Set[int]:
+    def layers(self):
         return set(key[1] for key in self.ids_to_heatmaps.keys())
 
-    def heads(self) -> Set[int]:
+    def heads(self):
         return set(key[2] for key in self.ids_to_heatmaps.keys())
 
     def __iter__(self):
