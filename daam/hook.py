@@ -97,21 +97,28 @@ class UNetCrossAttentionLocator(ModuleLocator):
         up_names = ['up'] * len(model.up_blocks)
         down_names = ['down'] * len(model.down_blocks)
         
-        for block, name in itertools.chain(
-            zip(model.up_blocks, up_names),
-            zip(model.down_blocks, down_names),
-            zip([model.mid_block], ['mid']) if self.locate_middle_block else [],
-        ):
+        for block, name in zip(model.up_blocks, up_names):
             if 'CrossAttn' in block.__class__.__name__:
-                blocks = []
+                blocks_list.extend(self.cross_attn(block, name))
 
-                for spatial_transformer in block.attentions:
-                    for transformer_block in spatial_transformer.transformer_blocks:
-                        blocks.append(transformer_block.attn2)
+        for block, name in zip(model.down_blocks, down_names):
+            if 'CrossAttn' in block.__class__.__name__:
+                blocks_list.extend(self.cross_attn(block, name))
 
-                blocks = [b for idx, b in enumerate(blocks) if self.restrict is None or idx in self.restrict]
-                names = [f'{name}-attn-{i}' for i in range(len(blocks)) if self.restrict is None or i in self.restrict]
-                blocks_list.extend(blocks)
-                self.layer_names.extend(names)
+        for block, name in zip([model.mid_block], ['mid']) if self.locate_middle_block else []:
+            if 'CrossAttn' in block.__class__.__name__:
+                blocks_list.extend(self.cross_attn(block, name))
 
         return blocks_list
+
+    def cross_attn(self, block, name):
+        blocks = []
+
+        for spatial_transformer in block.attentions:
+            for transformer_block in spatial_transformer.transformer_blocks:
+                blocks.append(transformer_block.attn2)
+
+        blocks = [b for idx, b in enumerate(blocks) if self.restrict is None or idx in self.restrict]
+        names = [f'{name}-attn-{i}' for i in range(len(blocks)) if self.restrict is None or i in self.restrict]
+        self.layer_names.extend(names)
+        return blocks
