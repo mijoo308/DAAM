@@ -1,4 +1,7 @@
-# [NLP 23f project] What the DAAM : Interpreting Stable Diffusion Using Cross Attention
+## [CMU NLP 23f team project] What the DAAM : Interpreting Stable Diffusion Using Cross Attention
+
+### Member
+- Mijoo Kim, Yejin Kim, Minwoo Kang, Sungju Oh, Wonjin Yang
 
 ### Description
 * Implentation of [what the DAAM : Interpreting Stable Diffusion Using Cross Attention, NACL'23](https://arxiv.org/abs/2210.04885)
